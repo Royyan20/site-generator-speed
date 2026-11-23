@@ -82,7 +82,11 @@ function wordsOf(text) {
   let n = 0;
   let inWord = false;
   for (let i = 0; i < text.length; i++) {
-    if (isWSCode(text.charCodeAt(i))) inWord = false;
+    const c = text.charCodeAt(i);
+    // inline isWSCode (JS \s set) — avoids a call per char on the hot path.
+    if (c === 32 || c === 9 || c === 10 || c === 13 || c === 11 || c === 12 ||
+        c === 0xA0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200A) || c === 0x2028 ||
+        c === 0x2029 || c === 0x202F || c === 0x205F || c === 0x3000 || c === 0xFEFF) inWord = false;
     else if (!inWord) { inWord = true; n++; }
   }
   return n;
@@ -706,8 +710,14 @@ function renderOps(ops, root, frame, parts) {
     const k = op[0];
     if (k === 0) parts.push(op[1]);
     else if (k === 1) {
-      const s = textOf(lookup(root, frame, op[1]));
-      parts.push(op[2] ? s : escapeHtml(s));
+      const v = lookup(root, frame, op[1]);
+      if (typeof v === 'number' || typeof v === 'boolean') {
+        // numbers/booleans stringify to [0-9.eE+-] / true/false: never an HTML char.
+        parts.push(String(v));
+      } else {
+        const s = textOf(v);
+        parts.push(op[2] ? s : escapeHtml(s));
+      }
     } else if (k === 2) {
       const branch = truthy(lookup(root, frame, op[1])) !== op[2] ? op[3] : op[4];
       if (branch !== null) renderOps(branch, root, frame, parts);
